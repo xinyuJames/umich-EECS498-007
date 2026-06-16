@@ -1,0 +1,14 @@
+# datasets
+cifar-10-batches-py
+cifar-10-python.tar.gz
+*.tar.gz
+datasets/MNIST/
+mnist_dataset/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
