@@ -340,8 +340,6 @@ def knn_cross_validate(
     """
 
     # First we divide the training data into num_folds equally-sized folds.
-    x_train_folds = x_train.chunk(num_folds)
-    y_train_folds = y_train.chunk(num_folds)
     ##########################################################################
     # TODO: Split the training data and images into folds. After splitting,  #
     # x_train_folds and y_train_folds should be lists of length num_folds,   #
@@ -350,7 +348,8 @@ def knn_cross_validate(
     # HINT: torch.chunk                                                      #
     ##########################################################################
     # Replace "pass" statement with your code
-    pass
+    x_train_folds = x_train.chunk(num_folds)
+    y_train_folds = y_train.chunk(num_folds)
     ##########################################################################
     #                           END OF YOUR CODE                             #
     ##########################################################################

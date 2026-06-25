@@ -146,12 +146,12 @@ def nn_forward_pass(params: Dict[str, torch.Tensor], X: torch.Tensor):
     # Store the result in the scores variable, which should be an tensor of    #
     # shape (N, C).                                                            #
     ############################################################################
-    # Replace "pass" statement with your code
-    pass
+    hidden_no_relu = X.matmul(W1) + b1 # (N, H)
+    hidden = torch.clamp(hidden_no_relu, min=0)
+    scores = hidden.matmul(W2) + b2 # (N, C)
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-
     return scores, hidden
 
 
@@ -195,7 +195,7 @@ def nn_forward_backward(
     W2, b2 = params["W2"], params["b2"]
     N, D = X.shape
 
-    scores, h1 = nn_forward_pass(params, X)
+    scores, h1 = nn_forward_pass(params, X) # (N, C), (N, H)
     # If the targets are not given then jump out, we're done
     if y is None:
         return scores
@@ -212,7 +212,13 @@ def nn_forward_backward(
     # (Check Numeric Stability in http://cs231n.github.io/linear-classify/).   #
     ############################################################################
     # Replace "pass" statement with your code
-    pass
+    m = torch.max(scores, dim=1).values
+
+    all_s_exp_yi = torch.e ** (scores[torch.arange(N), y] - m) # (N, )
+    all_s_exp_i = torch.sum(torch.e ** (scores - m.unsqueeze(dim=1)), dim=1) # (N, )
+    loss = -1 * torch.sum(torch.log(all_s_exp_yi / all_s_exp_i)) / N + reg * torch.sum(W1 * W1) \
+      + reg * torch.sum(W2 * W2)
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -226,7 +232,15 @@ def nn_forward_backward(
     # tensor of same size                                                     #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    mask = torch.e ** (scores - m.unsqueeze(dim=1)) / all_s_exp_i.unsqueeze(dim=1)
+    mask[torch.arange(N), y] -= 1 # (N, C)
+
+    grads["W2"] = h1.t().matmul(mask) / N + 2 * reg * W2 # (H, C)
+    grad_hidden = mask.matmul(W2.t()) # (N, H)
+    grad_hidden[h1 <= 0] = 0 # max router, clamped by 0 -> grad 0
+    grads["W1"] = X.t().matmul(grad_hidden) / N + 2 * reg * W1
+    grads["b1"] = torch.sum(grad_hidden, dim=0) / N
+    grads["b2"] = torch.sum(mask, dim=0) / N
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -307,7 +321,10 @@ def nn_train(
         # stored in the grads dictionary defined above.                         #
         #########################################################################
         # Replace "pass" statement with your code
-        pass
+        params["W1"] -= grads["W1"] * learning_rate
+        params["W2"] -= grads["W2"] * learning_rate
+        params["b1"] -= grads["b1"] * learning_rate
+        params["b2"] -= grads["b2"] * learning_rate
         #########################################################################
         #                             END OF YOUR CODE                          #
         #########################################################################
@@ -365,7 +382,8 @@ def nn_predict(
     # TODO: Implement this function; it should be VERY simple!                #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    scores, _ = nn_forward_pass(params, X) # (N, C)
+    y_pred = torch.max(scores, dim=1).indices
     ###########################################################################
     #                              END OF YOUR CODE                           #
     ###########################################################################
@@ -388,10 +406,6 @@ def nn_get_search_params():
     - learning_rate_decays: learning rate decay candidates
                                 e.g. [1.0, 0.95, ...]
     """
-    learning_rates = []
-    hidden_sizes = []
-    regularization_strengths = []
-    learning_rate_decays = []
     ###########################################################################
     # TODO: Add your own hyper parameter lists. This should be similar to the #
     # hyperparameters that you used for the SVM, but you may need to select   #
@@ -399,7 +413,10 @@ def nn_get_search_params():
     # classifier.                                                             #
     ###########################################################################
     # Replace "pass" statement with your code
-    pass
+    learning_rates = [0.95, 0.9e0, 0.85]
+    hidden_sizes = [512, 1024]
+    regularization_strengths = [5e-4, 1e-3, 5e-3]
+    learning_rate_decays = [1.0, 0.98, 0.96]
     ###########################################################################
     #                           END OF YOUR CODE                              #
     ###########################################################################
@@ -460,9 +477,36 @@ def find_best_net(
     # automatically like we did on the previous exercises.                      #
     #############################################################################
     # Replace "pass" statement with your code
-    pass
+    X_train = data_dict['X_train']
+    y_train = data_dict['y_train']
+    X_val = data_dict['X_val']
+    y_val = data_dict['y_val']
+
+    num_iteration = 3000
+    batch_size = 2000
+
+    input_size = X_train.shape[1]
+    output_size = torch.max(y_val) + 1
+
+    learning_rates, hidden_sizes, regularization_strengths, learning_rate_decays = get_param_set_fn()
+    for lr in learning_rates:
+        for hs in hidden_sizes:
+            for rs in regularization_strengths:
+                for lrd in learning_rate_decays:
+                    # W and b are initialized to 0
+                    net = TwoLayerNet(input_size, hs, output_size)
+                    stat = net.train(X_train, y_train, X_val, y_val, lr, lrd, rs, num_iteration, batch_size, False)
+                    val_acc = torch.tensor(stat["val_acc_history"])
+                    if (torch.max(val_acc) > best_val_acc):
+                        best_val_acc = torch.max(val_acc)
+                        best_net = net
+                        best_stat = stat
+                        best_comb = [lr, hs, rs, lrd]
+
+
+
     #############################################################################
     #                               END OF YOUR CODE                            #
     #############################################################################
 
-    return best_net, best_stat, best_val_acc
+    return best_net, best_stat, best_val_acc, best_comb
